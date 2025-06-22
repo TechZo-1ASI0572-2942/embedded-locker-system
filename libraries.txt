@@ -5,3 +5,6 @@ Keypad
 ESP32Servo
 LiquidCrystal I2C
 HX711
+WiFi
+HttpClient
+ArduinoJson

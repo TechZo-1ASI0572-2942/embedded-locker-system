@@ -4,11 +4,29 @@
 #include <LiquidCrystal_I2C.h>
 #include <ESP32Servo.h>
 #include <HX711.h>
+#include <ArduinoJson.h>
+#include <HTTPClient.h>
+
+// WiFi SimulatorCredentials
+#define WIFI_SSID "Wokwi-GUEST"
+#define WIFI_PASSWORD ""
+
+
+#define ENDPOINT_URL "https://cambiazo-edge-e7fmd6d5dcchhnbc.eastus-01.azurewebsites.net/api/v1/lockers/records/A03"
 
 #define RED_LED_PIN 18
 #define GREEN_LED_PIN 5
 #define HX_DT_PIN 35
 #define HX_SCK_PIN 16
+
+// HTTP Header Parameter and Value
+#define CONTENT_TYPE_HEADER "Content-Type"
+#define APPLICATION_JSON "application/json"
+
+
+// HTTP Client
+HTTPClient httpClient;
+
 
 //HX711
 HX711 scale;
@@ -52,6 +70,8 @@ bool ledState = false;
 unsigned long ledStartTime = 0;
 int currentState = 0; // 0=normal, 1=success, 2=error
 unsigned long messageStartTime = 0;
+String validPin = "0000"; 
+
 
 void setup() {
   Serial.begin(9600);
@@ -68,6 +88,32 @@ void setup() {
 
   lcd.init();
   lcd.backlight();
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  delay(500);
+  while (WiFi.status() != WL_CONNECTED) {
+   delay(500); 
+  }
+    // Perform connection
+  httpClient.begin(ENDPOINT_URL);
+  int httpResponseCode = httpClient.GET();
+
+    // Perform POST with Data Record
+  httpClient.addHeader(CONTENT_TYPE_HEADER, APPLICATION_JSON);
+  httpClient.GET();
+
+  // Check Response
+  DynamicJsonDocument response(1024);
+  String responseResource;
+  responseResource = httpClient.getString();
+  deserializeJson(response, responseResource);
+  validPin = response["pin_deposit"].as<String>();
+  Serial.print("PIN obtenido del servidor: ");
+  Serial.println(validPin);
+  serializeJsonPretty(response, Serial);
+  
+  httpClient.end();
+
 
   updateLockStatus();
 }
@@ -131,7 +177,7 @@ void handleKeypadInput(char key) {
     if (key == '#' && codeIndex > 0) { // Check for Enter key
       enteredCode[codeIndex] = '\0'; // Null-terminate the entered code
       
-      if (strcmp(enteredCode, "1234") == 0) { // Check if the entered code is correct
+      if (String(enteredCode) == validPin) {// Check if the entered code is correct
         unlockDoor();
         showMessage("Door Unlocked");
         activateLED(GREEN_LED_PIN);
